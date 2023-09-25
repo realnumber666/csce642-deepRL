@@ -70,6 +70,10 @@ class ValueIteration(AbstractSolver):
             ################################
             #   YOUR IMPLEMENTATION HERE   #
             ################################
+            action_values = self.one_step_lookahead(each_state)
+            best_action_value = np.max(action_values)
+
+            self.V[each_state] = best_action_value
 
         # Dont worry about this part
         self.statistics[Statistics.Rewards.value] = np.sum(self.V)
@@ -139,7 +143,9 @@ class ValueIteration(AbstractSolver):
             ################################
             #   YOUR IMPLEMENTATION HERE   #
             ################################
-            
+            action_values = self.one_step_lookahead(state)
+            greedy_action = np.argmax(action_values)
+            return greedy_action
 
         return policy_fn
 
@@ -191,6 +197,22 @@ class AsynchVI(ValueIteration):
         # Do a one-step lookahead to find the best action       #
         # Update the value function. Ref: Sutton book eq. 4.10. #
         #########################################################
+
+        state = self.pq.pop()
+        # Do a one-step lookahead to find the best action
+        action_values = self.one_step_lookahead(state)
+        best_action_value = np.max(action_values)
+
+        # Update the value function using the value iteration algorithm
+        self.V[state] = best_action_value
+
+        # Update the priority of the states that lead to the current state
+        if state in self.pred:
+            for pred_state in self.pred[state]:
+                action_values = self.one_step_lookahead(pred_state)
+                best_action_value = np.max(action_values)
+                priority = -abs(self.V[pred_state] - best_action_value)
+                self.pq.update(pred_state, priority)
 
         # you can ignore this part
         self.statistics[Statistics.Rewards.value] = np.sum(self.V)
