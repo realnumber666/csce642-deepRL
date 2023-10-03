@@ -196,7 +196,6 @@ class OffPolicyMC(MonteCarlo):
                 break
             state = new_state
 
-        # Variables to keep track of returns and importance sampling ratio
         G = 0.0
         W = 1.0
         for t in range(len(episode) - 1, -1, -1):
@@ -204,14 +203,10 @@ class OffPolicyMC(MonteCarlo):
             G = self.options.gamma * G + reward
             # Update the denominator for weighted importance sampling
             self.C[state][action] += W
-            # Update the action-value function using the weighted importance sampling formula
-            self.Q[state][action] += (W / self.C[state][action]) * (G - self.Q[state][action])
-            # If the action taken by the behavior policy is not the action taken by the target policy then break
-            if action != np.argmax(self.target_policy(state)):
+            self.Q[state][action] += W / self.C[state][action] * (G - self.Q[state][action])
+            if action != self.target_policy(state):
                 break
             W *= 1. / self.behavior_policy(state)[action]
-
-        return
 
     def create_random_policy(self):
         """
