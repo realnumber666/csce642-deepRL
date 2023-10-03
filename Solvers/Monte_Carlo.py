@@ -65,6 +65,24 @@ class MonteCarlo(AbstractSolver):
         ################################
         #   YOUR IMPLEMENTATION HERE   #
         ################################
+        while True:
+            probs = self.policy(state)
+            action = np.random.choice(np.arange(len(probs)), p=probs)
+            next_state, reward, done, _ = self.step(action)
+            episode.append((state, action, reward))
+            state = next_state
+            if done or len(episode) >= self.options.steps:
+                break
+
+        # Update the Q-values using the generated episode
+        G = 0
+        for t in reversed(range(len(episode))):
+            state, action, reward = episode[t]
+            G = self.options.gamma * G + reward
+            self.returns_sum[(state, action)] += G
+            self.returns_count[(state, action)] += 1
+            self.Q[state][action] = self.returns_sum[(state, action)] / self.returns_count[(state, action)]
+
 
     def __str__(self):
         return "Monte Carlo"
@@ -85,11 +103,16 @@ class MonteCarlo(AbstractSolver):
 
         """
         nA = self.env.action_space.n
+        epsilon = self.options.epsilon
 
         def policy_fn(observation):
             ################################
             #   YOUR IMPLEMENTATION HERE   #
             ################################
+            A = np.ones(nA, dtype=float) * epsilon / nA
+            best_action = np.argmax(self.Q[observation])
+            A[best_action] += (1.0 - epsilon)
+            return A
 
         return policy_fn
 
@@ -109,7 +132,7 @@ class MonteCarlo(AbstractSolver):
             ################################
             #   YOUR IMPLEMENTATION HERE   #
             ################################
-
+            return np.argmax(self.Q[state])
 
         return policy_fn
 
@@ -163,7 +186,32 @@ class OffPolicyMC(MonteCarlo):
         ################################
         #   YOUR IMPLEMENTATION HERE   #
         ################################
-        
+        # Generate an episode following behavior policy
+        for t in range(self.options.steps):
+            probs = self.behavior_policy(state)
+            action = np.random.choice(np.arange(len(probs)), p=probs)
+            new_state, reward, done, _ = self.step(action)
+            episode.append((state, action, reward))
+            if done:
+                break
+            state = new_state
+
+        # Variables to keep track of returns and importance sampling ratio
+        G = 0.0
+        W = 1.0
+        for t in range(len(episode) - 1, -1, -1):
+            state, action, reward = episode[t]
+            G = self.options.gamma * G + reward
+            # Update the denominator for weighted importance sampling
+            self.C[state][action] += W
+            # Update the action-value function using the weighted importance sampling formula
+            self.Q[state][action] += (W / self.C[state][action]) * (G - self.Q[state][action])
+            # If the action taken by the behavior policy is not the action taken by the target policy then break
+            if action != np.argmax(self.target_policy(state)):
+                break
+            W *= 1. / self.behavior_policy(state)[action]
+
+        return
 
     def create_random_policy(self):
         """
