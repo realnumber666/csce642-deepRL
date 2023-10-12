@@ -53,6 +53,19 @@ class QLearning(AbstractSolver):
         ################################
         #   YOUR IMPLEMENTATION HERE   #
         ################################
+        for t in range(self.options.steps):
+            action = self.epsilon_greedy_action(state)
+            next_state, reward, done, _ = self.step(action)
+
+            best_next_action = np.argmax(self.Q[next_state])
+            td_target = reward + self.options.gamma * self.Q[next_state][best_next_action]
+            td_delta = td_target - self.Q[state][action]
+            self.Q[state][action] += self.options.alpha * td_delta
+
+            if done:
+                break
+
+            state = next_state
 
     def __str__(self):
         return "Q-Learning"
@@ -74,6 +87,7 @@ class QLearning(AbstractSolver):
             ################################
             #   YOUR IMPLEMENTATION HERE   #
             ################################
+            return np.argmax(self.Q[state])
 
         return policy_fn
 
@@ -91,6 +105,11 @@ class QLearning(AbstractSolver):
         ################################
         #   YOUR IMPLEMENTATION HERE   #
         ################################
+        if np.random.rand() < self.options.epsilon:
+            return np.random.randint(self.env.action_space.n)
+        else:
+            return np.argmax(self.Q[state])
+
 
 
 class ApproxQLearning(QLearning):
@@ -120,6 +139,24 @@ class ApproxQLearning(QLearning):
         ################################
         #   YOUR IMPLEMENTATION HERE   #
         ################################
+        for t in range(self.options.steps):
+            probs = self.epsilon_greedy(state)
+            action = np.random.choice(np.arange(len(probs)), p=probs)
+
+            next_state, reward, done, _ = self.step(action)
+
+            # TD Target for the Q function approximation
+            q_values_next = [self.estimator.predict(next_state, a) for a in range(self.env.action_space.n)]
+            best_next_action = np.argmax(q_values_next)
+            td_target = reward + self.options.gamma * q_values_next[best_next_action]
+
+            # Update our Q-value estimator
+            self.estimator.update(state, action, td_target)
+
+            if done:
+                break
+
+            state = next_state
 
     def __str__(self):
         return "Approx Q-Learning"
@@ -138,6 +175,14 @@ class ApproxQLearning(QLearning):
         ################################
         #   YOUR IMPLEMENTATION HERE   #
         ################################
+        nA = self.env.action_space.n
+        probs = np.ones(nA) * self.options.epsilon / nA
+
+        q_values = [self.estimator.predict(state, a) for a in range(nA)]
+        best_action = np.argmax(q_values)
+
+        probs[best_action] += (1.0 - self.options.epsilon)
+        return probs
 
     def create_greedy_policy(self):
         """
@@ -153,7 +198,8 @@ class ApproxQLearning(QLearning):
             ################################
             #   YOUR IMPLEMENTATION HERE   #
             ################################
-            
+            q_values = [self.estimator.predict(state, a) for a in range(nA)]
+            return np.argmax(q_values)
 
         return policy_fn
 
