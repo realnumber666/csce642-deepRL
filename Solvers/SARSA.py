@@ -46,6 +46,21 @@ class Sarsa(AbstractSolver):
         ################################
         #   YOUR IMPLEMENTATION HERE   #
         ################################
+        action = self.epsilon_greedy_action(state)
+
+        for t in range(self.options.steps):
+            next_state, reward, done, _ = self.step(action)
+            next_action = self.epsilon_greedy_action(next_state)
+
+            # SARSA update rule
+            td_target = reward + self.options.gamma * self.Q[next_state][next_action]
+            td_error = td_target - self.Q[state][action]
+            self.Q[state][action] += self.options.alpha * td_error
+
+            if done:
+                break
+
+            state, action = next_state, next_action
 
     def __str__(self):
         return "Sarsa"
@@ -62,6 +77,7 @@ class Sarsa(AbstractSolver):
             ################################
             #   YOUR IMPLEMENTATION HERE   #
             ################################
+            return np.argmax(self.Q[state])
 
         return policy_fn
 
@@ -79,6 +95,11 @@ class Sarsa(AbstractSolver):
         ################################
         #   YOUR IMPLEMENTATION HERE   #
         ################################
+        nA = self.env.action_space.n
+        probs = np.ones(nA) * self.options.epsilon / nA
+        best_action = np.argmax(self.Q[state])
+        probs[best_action] += (1.0 - self.options.epsilon)
+        return np.random.choice(np.arange(nA), p=probs)
 
     def plot(self, stats, smoothing_window=20, final=False):
         plotting.plot_episode_stats(stats, smoothing_window, final=final)
