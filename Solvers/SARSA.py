@@ -46,11 +46,13 @@ class Sarsa(AbstractSolver):
         ################################
         #   YOUR IMPLEMENTATION HERE   #
         ################################
-        action = self.epsilon_greedy_action(state)
+        probs = self.epsilon_greedy_action(state)
+        action = np.random.choice(np.arange(len(probs)), p=probs)
 
         for t in range(self.options.steps):
             next_state, reward, done, _ = self.step(action)
-            next_action = self.epsilon_greedy_action(next_state)
+            next_probs = self.epsilon_greedy_action(next_state)
+            next_action = np.random.choice(np.arange(len(next_probs)), p=next_probs)
 
             # SARSA update rule
             td_target = reward + self.options.gamma * self.Q[next_state][next_action]
@@ -99,7 +101,7 @@ class Sarsa(AbstractSolver):
         probs = np.ones(nA) * self.options.epsilon / nA
         best_action = np.argmax(self.Q[state])
         probs[best_action] += (1.0 - self.options.epsilon)
-        return np.random.choice(np.arange(nA), p=probs)
+        return probs
 
     def plot(self, stats, smoothing_window=20, final=False):
         plotting.plot_episode_stats(stats, smoothing_window, final=final)

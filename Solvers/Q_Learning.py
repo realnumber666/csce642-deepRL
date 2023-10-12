@@ -54,7 +54,8 @@ class QLearning(AbstractSolver):
         #   YOUR IMPLEMENTATION HERE   #
         ################################
         for t in range(self.options.steps):
-            action = self.epsilon_greedy_action(state)
+            probs = self.epsilon_greedy_action(state)
+            action = np.random.choice(np.arange(len(probs)), p=probs)
             next_state, reward, done, _ = self.step(action)
 
             # Q-learning update rule
@@ -107,10 +108,10 @@ class QLearning(AbstractSolver):
         #   YOUR IMPLEMENTATION HERE   #
         ################################
         nA = self.env.action_space.n
-        probs = np.ones(nA, dtype=float) * self.options.epsilon / nA
+        probs = np.ones(nA) * self.options.epsilon / nA
         best_action = np.argmax(self.Q[state])
         probs[best_action] += (1.0 - self.options.epsilon)
-        return np.random.choice(np.arange(nA), p=probs)
+        return probs
 
 
 class ApproxQLearning(QLearning):
@@ -147,9 +148,8 @@ class ApproxQLearning(QLearning):
             next_state, reward, done, _ = self.step(action)
 
             # TD Target for the Q function approximation
-            q_values_next = [self.estimator.predict(next_state, a) for a in range(self.env.action_space.n)]
-            best_next_action = np.argmax(q_values_next)
-            td_target = reward + self.options.gamma * q_values_next[best_next_action]
+            q_values_next = self.estimator.predict(next_state)
+            td_target = reward + self.options.gamma * np.max(q_values_next)
 
             # Update our Q-value estimator
             self.estimator.update(state, action, td_target)
