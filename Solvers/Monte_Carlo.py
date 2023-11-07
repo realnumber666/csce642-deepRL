@@ -1,8 +1,9 @@
 # Licensing Information:  You are free to use or extend this codebase for
 # educational purposes provided that (1) you do not distribute or publish
-# solutions, (2) you retain this notice, and (3) you provide the following
-# attribution:
-# This CSCE-689 RL assignment codebase was developed at Texas A&M University.
+# solutions, (2) you retain this notice, and (3) inform Guni Sharon at 
+# guni@tamu.edu regarding your usage (relevant statistics is reported to NSF).
+# The development of this assignment was supported by NSF (IIS-2238979).
+# Contributors:
 # The core code base was developed by Guni Sharon (guni@tamu.edu).
 
 from collections import defaultdict, OrderedDict
@@ -37,7 +38,7 @@ class MonteCarlo(AbstractSolver):
 
     def train_episode(self):
         """
-        Run a single episode for Monte Carlo Control using Epsilon-Greedy policies.
+        Run a single episode for (first visit) Monte Carlo Control using Epsilon-Greedy policies.
 
         Use:
             self.options.env: OpenAI gym environment.
@@ -52,9 +53,8 @@ class MonteCarlo(AbstractSolver):
             train_episode is called multiple times from run.py. Within
             train_episode you need to store the transitions in 1 complete
             trajectory/episode. Then using the transitions in that episode,
-            update the Q-function. You should NOT store multiple episodes.
-            You should update the Q-function using a moving average instead
-            to take into account the Q-values from the previous episodes.
+            update the Q-function. Set Q-values as the (simple) average return for 
+            visited states over all sampled episodes
         """
 
         # Generate an episode.

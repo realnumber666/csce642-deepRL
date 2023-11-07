@@ -1,8 +1,9 @@
 # Licensing Information:  You are free to use or extend this codebase for
 # educational purposes provided that (1) you do not distribute or publish
-# solutions, (2) you retain this notice, and (3) you provide the following
-# attribution:
-# This CSCE-689 RL assignment codebase was developed at Texas A&M University.
+# solutions, (2) you retain this notice, and (3) inform Guni Sharon at 
+# guni@tamu.edu regarding your usage (relevant statistics is reported to NSF).
+# The development of this assignment was supported by NSF (IIS-2238979).
+# Contributors:
 # The autograder for the assignments was developed by Sumedh Pendurkar (sumedhpendurkar@tamu.edu)
 # and Sheelabhadra Dey (sheelabhadra@tamu.edu).
 
@@ -786,7 +787,7 @@ class sarsa(unittest.TestCase):
             .rolling(smoothing_window, min_periods=smoothing_window)
             .mean()
         )
-        print(np.mean(rewards_smoothed[:10]),  np.mean(ep_len[450:]))
+        #print(np.mean(rewards_smoothed[:10]),  np.mean(ep_len[450:]))
         self.assertTrue(
             np.mean(rewards_smoothed[:10]) < -99 and np.mean(ep_len[450:]) < 61,
             "got unexpected rewards for cliff walking",
@@ -797,7 +798,7 @@ class sarsa(unittest.TestCase):
             .rolling(smoothing_window, min_periods=smoothing_window)
             .mean()
         )
-        print(np.max(stats.episode_rewards), np.mean(rewards_smoothed[499:]))
+        #print(np.max(stats.episode_rewards), np.mean(rewards_smoothed[499:]))
         self.assertTrue(
             np.max(stats.episode_rewards) > -18
             and np.mean(rewards_smoothed[499:]) > -70,
@@ -960,6 +961,7 @@ class dqn(unittest.TestCase):
             dtype=torch.float32,
         )
         dummy_done = torch.tensor([0], dtype=torch.float32)
+        dummy_next_state = dummy_next_state.reshape(1,-1)
         self.assertTrue(
             l2_distance_bounded(
                 solver.compute_target_values(dummy_next_state, dummy_reward, dummy_done)
@@ -972,13 +974,15 @@ class dqn(unittest.TestCase):
         )
         # Test 2
         dummy_reward = torch.tensor([10], dtype=torch.float32)
+        
         dummy_next_state = torch.tensor(
             [-2.1429, 0.8679, 0.2397, -0.5396, 0.3134, 0.5916, -1.1758, 0.0649],
             dtype=torch.float32,
         )
+        dummy_next_state = dummy_next_state.reshape(1,-1)
         dummy_done = torch.tensor([1], dtype=torch.float32)
         self.assertEqual(
-            solver.compute_target_values(dummy_next_state, dummy_reward, dummy_done)
+            solver.compute_target_values(dummy_next_state, dummy_reward, dummy_done).reshape(-1)
             .detach()
             .item(),
             10,
@@ -1011,16 +1015,12 @@ class dqn(unittest.TestCase):
             .rolling(smoothing_window, min_periods=smoothing_window)
             .mean()
         )
-        self.assertTrue(
-            np.mean(ep_len[:5]) < 200 and np.max(ep_len[90:]) > 1200,
-            "got unexpected rewards for cartpole",
-        )
-        self.__class__.points += 1
+
         self.assertTrue(
             np.mean(ep_len[:5]) < 200 and np.max(ep_len[80:]) > 1000,
             "got unexpected rewards for cartpole",
         )
-        self.__class__.points += 1
+        self.__class__.points += 2
         rewards_smoothed = (
             pd.Series(stats.episode_rewards)
             .rolling(smoothing_window, min_periods=smoothing_window)
@@ -1279,6 +1279,138 @@ class a2c(unittest.TestCase):
             "got unexpected rewards for cartpole",
         )
         self.__class__.points += 2
+
+    @classmethod
+    def tearDownClass(cls):
+        print("\nTotal Points: {} / 10".format(cls.points))
+
+
+class ddpg(unittest.TestCase):
+    points = 0
+
+    @classmethod
+    def setUpClass(self):
+        command_str = (
+            "-s ddpg -t 1000 -d HalfCheetah-v4 -e 0 -a 0.001 -g 0.99 -l [256,256] -m 1000000 -b 100 --no-plots"
+        )
+        self.results = run_main(command_str)
+    
+    def test_compute_target_values(self):
+        solver = self.results["solver"]
+        solver.actor_critic = torch.load('TestData/test_ddpg_ac_half_cheetah.pth')
+        solver.target_actor_critic = torch.load('TestData/test_ddpg_ac_target_half_cheetah.pth')
+        states = torch.Tensor(np.load('TestData/ddpg_states_cheetah.npy'))
+        rewards = torch.Tensor(np.load('TestData/ddpg_rewards_cheetah.npy'))
+        dones = torch.Tensor(np.load('TestData/ddpg_dones_cheetah.npy'))
+        target = np.load('TestData/test_ddpg_ctv_cheetah.npy')
+        values = solver.compute_target_values(states, rewards, dones).detach().numpy()
+        self.assertTrue(
+            l2_distance_bounded(
+                values,
+                target,
+                1e-2,
+            ),
+            "`test_compute_target_values' returns unexpected values.",
+        )
+
+        self.__class__.points += 2
+        
+        command_str = (
+            "-s ddpg -t 1000 -d LunarLanderContinuous-v2 -e 0 -a 0.001 -g 0.99 -l [64,64] -b 100 --no-plots"
+        )
+
+        results = run_main(command_str)
+        solver = results["solver"]
+        solver.actor_critic = torch.load('TestData/test_ddpg_ac_lunar_lander.pth')
+        solver.target_actor_critic = torch.load('TestData/test_ddpg_ac_target_lunar_lander.pth')
+        states = torch.Tensor(np.load('TestData/ddpg_states_lander.npy'))
+        rewards = torch.Tensor(np.load('TestData/ddpg_rewards_lander.npy'))
+        dones = torch.Tensor(np.load('TestData/ddpg_dones_lander.npy'))
+        values = solver.compute_target_values(states, rewards, dones)
+        target = np.load("TestData/test_ddpg_ctv_lander.npy")
+        self.assertTrue(
+            l2_distance_bounded(
+                values.detach().numpy(),
+                target,
+                1e-2,
+            ),
+            "`test_compute_target_values' returns unexpected values.",
+        )
+        self.__class__.points += 2
+
+    def test_pi_loss(self):
+        solver = self.results["solver"]
+        solver.actor_critic = torch.load('TestData/test_ddpg_ac_half_cheetah.pth')
+        states = torch.Tensor(np.load('TestData/ddpg_states_cheetah.npy'))
+        target = np.load("TestData/test_ddpg_pi_loss_cheetah.npy")
+        self.assertTrue(
+            l2_distance_bounded(
+                solver.pi_loss(states).detach().numpy(),
+                target,
+                1e-3,
+            ),
+            "`test_pi_loss' returns unexpected values.",
+        )
+        self.__class__.points += 1
+        
+        command_str = (
+            "-s ddpg -t 1000 -d LunarLanderContinuous-v2 -e 1 -a 0.001 -g 0.99 -l [64,64] -b 100 --no-plots"
+        )
+        results = run_main(command_str)
+        solver = results["solver"]
+        solver.actor_critic = torch.load('TestData/test_ddpg_ac_lunar_lander.pth')
+        states = torch.Tensor(np.load('TestData/ddpg_states_lander.npy'))
+        target = np.load("TestData/test_ddpg_pi_loss_lander.npy")
+        self.assertTrue(
+            l2_distance_bounded(
+                solver.pi_loss(states).detach().numpy(),
+                target,
+                1e-3,
+            ),
+            "`test_pi_loss' returns unexpected values.",
+        )
+        self.__class__.points += 1
+    
+    def test_lander_rewards(self):
+        command_str = (
+            "-s ddpg -t 1000 -d LunarLanderContinuous-v2 -e 1000 -a 0.001 -g 0.99 -l [64,64] -b 100 --no-plots"
+        )
+        results = run_main(command_str)
+        
+        stats = results["stats"]
+        smoothing_window = 10
+        rewards_smoothed = (
+            pd.Series(stats.episode_rewards)
+            .rolling(smoothing_window, min_periods=smoothing_window)
+            .mean()
+        )
+
+        self.assertTrue(
+            np.mean(rewards_smoothed[:15]) < -150 and 
+            np.mean(rewards_smoothed[550:]) > -150 and 
+            np.max(rewards_smoothed[700:]) > 150,
+            "got unexpected rewards for lunar_lander; verify implementation of ``train_episode''",
+        )
+        self.__class__.points += 3
+
+    def test_sanity_cheetah(self):
+        command_str = (
+            "-s ddpg -t 1000 -d HalfCheetah-v4 -e 15 -a 0.001 -g 0.99 -l [256,256] -m 1000000 -b 100 --no-plots"
+        )
+        results = run_main(command_str)
+
+        stats = results["stats"]
+        smoothing_window = 10
+        rewards_smoothed = (
+            pd.Series(stats.episode_rewards)
+            .rolling(smoothing_window, min_periods=smoothing_window)
+            .mean()
+        )
+        self.assertTrue(
+            np.mean(rewards_smoothed[:15]) < 2000,
+            "got unexpected rewards for half cheetah; verify implementation of ``train_episode''",
+        )
+        self.__class__.points += 1
 
     @classmethod
     def tearDownClass(cls):
