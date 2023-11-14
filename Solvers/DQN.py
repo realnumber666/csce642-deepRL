@@ -50,7 +50,7 @@ class DQN(AbstractSolver):
         assert str(env.action_space).startswith("Discrete") or str(
             env.action_space
         ).startswith("Tuple(Discrete"), (
-            str(self) + " cannot handle non-discrete action spaces"
+                str(self) + " cannot handle non-discrete action spaces"
         )
         super().__init__(env, eval_env, options)
         # Create Q-network
@@ -92,7 +92,7 @@ class DQN(AbstractSolver):
         Use:
             self.env.action_space.n: Number of avilable actions
             self.torch.as_tensor(state): Convert Numpy array ('state') to a tensor
-            self.model(state): Returns the predicted Q values at a 
+            self.model(state): Returns the predicted Q values at a
                 'state' as a tensor. One value per action.
             torch.argmax(values): Returns the index corresponding to the highest value in
                 'values' (a tensor)
@@ -101,7 +101,13 @@ class DQN(AbstractSolver):
         ################################
         #   YOUR IMPLEMENTATION HERE   #
         ################################
-
+        nA = self.env.action_space.n
+        action_prob = np.ones(nA, dtype=float) * self.options.epsilon / nA
+        state_tensor = torch.as_tensor(state, dtype=torch.float32).unsqueeze(0)
+        q_values = self.model(state_tensor)
+        best_action = torch.argmax(q_values, dim=1).item()
+        action_prob[best_action] += (1. - self.options.epsilon)
+        return action_prob
 
     def compute_target_values(self, next_states, rewards, dones):
         """
@@ -113,7 +119,10 @@ class DQN(AbstractSolver):
         ################################
         #   YOUR IMPLEMENTATION HERE   #
         ################################
-
+        next_states_tensor = torch.as_tensor(next_states, dtype=torch.float32)
+        next_q_values = self.target_model(next_states_tensor).max(1)[0].detach()
+        targets = rewards + self.options.gamma * next_q_values * (1 - dones)
+        return targets
 
     def replay(self):
         """
@@ -184,11 +193,22 @@ class DQN(AbstractSolver):
         # Reset the environment
         state, _ = self.env.reset()
 
-        for _ in range(self.options.steps):
+        for t in range(self.options.steps):
             ################################
             #   YOUR IMPLEMENTATION HERE   #
             ################################
+            action_prob = self.epsilon_greedy(state)
+            action = np.random.choice(np.arange(len(action_prob)), p=action_prob)
+            next_state, reward, done, _ = self.step(action)
+            self.memorize(state, action, reward, next_state, done)
+            self.replay()
 
+            if t % self.options.update_target_estimator_every == 0:
+                self.update_target_model()
+
+            state = next_state
+            if done:
+                break
 
     def __str__(self):
         return "DQN"
