@@ -151,11 +151,11 @@ class Reinforce(AbstractSolver):
             action_probs.append(prob)
             baselines.append(baseline)
 
-            state = next_state
             if done:
+                self.update_model(rewards, action_probs, baselines)
                 break
 
-        self.update_model(rewards, action_probs, baselines)
+            state = next_state
 
     def pg_loss(self, advantage, prob):
         """
@@ -173,9 +173,6 @@ class Reinforce(AbstractSolver):
         Returns:
             The unreduced loss (as a tensor).
         """
-        ################################
-        #   YOUR IMPLEMENTATION HERE   #
-        ################################
         return -advantage * torch.log(prob)
 
     def __str__(self):

@@ -145,7 +145,7 @@ class DDPG(AbstractSolver):
 
         Use:
             self.target_actor_critic.pi(states): Returns the greedy action at states.
-            self.target_actor_critic.q(states, actions): Returns the Q-values 
+            self.target_actor_critic.q(states, actions): Returns the Q-values
                 for (states, actions).
 
         Returns:
@@ -154,7 +154,10 @@ class DDPG(AbstractSolver):
         ################################
         #   YOUR IMPLEMENTATION HERE   #
         ################################
-
+        next_actions = self.target_actor_critic.pi(next_states)
+        next_q = self.target_actor_critic.q(next_states, next_actions)
+        target_q = rewards + self.options.gamma * next_q * (1 - dones)
+        return target_q
 
     def replay(self):
         """
@@ -220,7 +223,17 @@ class DDPG(AbstractSolver):
             ################################
             #   YOUR IMPLEMENTATION HERE   #
             ################################
-            
+            action = self.select_action(state)
+            next_state, reward, done, _ = self.step(action)
+
+            self.memorize(state, action, reward, next_state, done)
+            self.replay()
+            self.update_target_networks()
+
+            if done:
+                break
+
+            state = next_state
 
     def q_loss(self, current_q, target_q):
         """
@@ -236,6 +249,7 @@ class DDPG(AbstractSolver):
         ################################
         #   YOUR IMPLEMENTATION HERE   #
         ################################
+        return F.mse_loss(current_q, target_q, reduction='none')
 
     def pi_loss(self, states):
         """
@@ -258,6 +272,10 @@ class DDPG(AbstractSolver):
         ################################
         #   YOUR IMPLEMENTATION HERE   #
         ################################
+        actions = self.actor_critic.pi(states)
+        q_values = self.actor_critic.q(states, actions)
+
+        return -q_values
 
     def __str__(self):
         return "DDPG"
