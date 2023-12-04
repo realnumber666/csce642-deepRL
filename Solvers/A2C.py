@@ -16,6 +16,8 @@ from torch.optim import Adam
 
 from Solvers.Abstract_Solver import AbstractSolver
 from lib import plotting
+import time
+from collections import deque
 
 
 class ActorCriticNetwork(nn.Module):
@@ -53,6 +55,34 @@ class A2C(AbstractSolver):
         self.policy = self.create_greedy_policy()
 
         self.optimizer = Adam(self.actor_critic.parameters(), lr=self.options.alpha)
+
+        self.start_time = time.time()
+        self.total_training_time = 0
+        self.convergence_check_episodes = 50
+        self.convergence_threshold = 300
+        self.rewards_history = deque(maxlen=self.convergence_check_episodes)
+        self.converged = False
+        self.previous_avg = 0
+
+    def moving_average(self, data, window_size):
+        data_list = list(data)
+        if len(data_list) < window_size:
+            return np.mean(data_list)
+        return np.mean(data_list[-window_size:])
+
+    def has_converged(self):
+        if len(self.rewards_history) < self.convergence_check_episodes:
+            self.consecutive_convergence_count = 0
+            return False
+
+        current_avg = self.moving_average(self.rewards_history, self.convergence_check_episodes)
+        if np.abs(current_avg - self.previous_avg) < self.convergence_threshold:
+            self.consecutive_convergence_count += 1
+        else:
+            self.consecutive_convergence_count = 0
+        print(f"current_avg {current_avg}, previous_avg {self.previous_avg}, consecutive_convergence_count {self.consecutive_convergence_count}")
+        # return self.consecutive_convergence_count >= self.convergence_check_episodes
+
 
     def create_greedy_policy(self):
         """
@@ -123,6 +153,9 @@ class A2C(AbstractSolver):
         """
 
         state, _ = self.env.reset()
+        total_reward = 0
+        self.previous_avg = self.moving_average(self.rewards_history, self.convergence_check_episodes)
+
         for _ in range(self.options.steps):
             ################################
             #   YOUR IMPLEMENTATION HERE   #
@@ -137,6 +170,13 @@ class A2C(AbstractSolver):
             state = next_state
             if done:
                 break
+
+        self.rewards_history.append(total_reward)
+        if self.has_converged():
+            end_time = time.time()
+            self.total_training_time = end_time - self.start_time
+            self.converged = True
+            print(f"Algorithm converged in {self.total_training_time} seconds.")
 
     def actor_loss(self, advantage, prob):
         """

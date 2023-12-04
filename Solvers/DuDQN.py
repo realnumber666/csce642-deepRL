@@ -46,7 +46,7 @@ class QFunction(nn.Module):
         return self.layers[-1](x).squeeze(dim=-1)
 
 
-class DQN(AbstractSolver):
+class DuDQN(AbstractSolver):
     def __init__(self, env, eval_env, options):
         assert str(env.action_space).startswith("Discrete") or str(
             env.action_space
@@ -60,11 +60,19 @@ class DQN(AbstractSolver):
             env.action_space.n,
             self.options.layers,
         )
+
+        # Create behavior model
+        self.behavior_model = QFunction(
+            env.observation_space.shape[0],
+            env.action_space.n,
+            self.options.layers,
+        )
+
         # Create target Q-network
         self.target_model = deepcopy(self.model)
         # Set up the optimizer
         self.optimizer = AdamW(
-            self.model.parameters(), lr=self.options.alpha, amsgrad=True
+            self.behavior_model.parameters(), lr=self.options.alpha, amsgrad=True
         )
         # Define the loss function
         self.loss_fn = nn.SmoothL1Loss()
@@ -79,10 +87,11 @@ class DQN(AbstractSolver):
         # Number of training steps so far
         self.n_steps = 0
 
+        # 收敛时间统计逻辑
         self.start_time = time.time()
-        self.total_training_time = 0
-        self.convergence_check_episodes = 50
-        self.convergence_threshold = 300
+        self.total_training_time = 0  # 总训练时间
+        self.convergence_check_episodes = 50  # 用于检测收敛的连续周期数
+        self.convergence_threshold = 300  # 判断收敛的奖励标准差阈值
         self.rewards_history = deque(maxlen=self.convergence_check_episodes)
         self.converged = False
         self.previous_avg = 0
@@ -104,11 +113,9 @@ class DQN(AbstractSolver):
         else:
             self.consecutive_convergence_count = 0
         print(f"current_avg {current_avg}, previous_avg {self.previous_avg}, consecutive_convergence_count {self.consecutive_convergence_count}")
-        return self.consecutive_convergence_count >= self.convergence_check_episodes
 
     def update_target_model(self):
-        # Copy weights from model to target_model
-        self.target_model.load_state_dict(self.model.state_dict())
+        self.target_model.load_state_dict(self.behavior_model.state_dict())
 
     def epsilon_greedy(self, state):
         """
@@ -132,7 +139,7 @@ class DQN(AbstractSolver):
         nA = self.env.action_space.n
         action_prob = np.ones(nA, dtype=float) * self.options.epsilon / nA
         state_tensor = torch.as_tensor(state, dtype=torch.float32).unsqueeze(0)
-        q_values = self.model(state_tensor)
+        q_values = self.behavior_model(state_tensor)
         best_action = torch.argmax(q_values, dim=1).item()
         action_prob[best_action] += (1. - self.options.epsilon)
         return action_prob
@@ -179,23 +186,30 @@ class DQN(AbstractSolver):
             next_states = torch.as_tensor(next_states, dtype=torch.float32)
             dones = torch.as_tensor(dones, dtype=torch.float32)
 
+            # Use behavior model to select action
+            behavior_q_values = self.behavior_model(next_states)
+            max_behavior_actions = torch.argmax(behavior_q_values, dim=1)
+
+            # Use target model to select q
+            target_q_values = self.target_model(next_states).detach()
+            target_q = target_q_values.gather(1, max_behavior_actions.unsqueeze(1)).squeeze(-1)
+
+            td_target = rewards + self.options.gamma * target_q * (1 - dones)
+
             # Current Q-values
-            current_q = self.model(states)
+            current_q = self.behavior_model(states)
             # Q-values for actions in the replay memory
             current_q = torch.gather(
                 current_q, dim=1, index=actions.unsqueeze(1).long()
             ).squeeze(-1)
 
-            with torch.no_grad():
-                target_q = self.compute_target_values(next_states, rewards, dones)
-
             # Calculate loss
-            loss_q = self.loss_fn(current_q, target_q)
+            loss = self.loss_fn(current_q, td_target)
 
             # Optimize the Q-network
             self.optimizer.zero_grad()
-            loss_q.backward()
-            torch.nn.utils.clip_grad_value_(self.model.parameters(), 100)
+            loss.backward()
+            torch.nn.utils.clip_grad_value_(self.behavior_model.parameters(), 100)
             self.optimizer.step()
 
     def memorize(self, state, action, reward, next_state, done):
@@ -241,6 +255,7 @@ class DQN(AbstractSolver):
             if done:
                 break
 
+        # 更新奖励历史并检查是否收敛
         self.rewards_history.append(total_reward)
         if self.has_converged():
             end_time = time.time()
@@ -249,10 +264,10 @@ class DQN(AbstractSolver):
             print(f"Algorithm converged in {self.total_training_time} seconds.")
 
     def __str__(self):
-        return "DQN"
+        return "DuDQN"
 
     def plot(self, stats, smoothing_window, final=False):
-        plotting.plot_episode_stats(stats, smoothing_window, final=final)
+        plotting.plot_episode_stats(stats, 25, final=final)
 
     def create_greedy_policy(self):
         """

@@ -13,6 +13,8 @@ import os
 import random
 import numpy as np
 import torch
+import time
+import psutil
 
 gym.logger.set_level(40)
 
@@ -192,7 +194,7 @@ def getEnv(domain, render_mode=""):
         return WindyGridworldEnv()
     else:
         try:
-            return gym.make(domain, render_mode=render_mode)
+            return gym.make(domain)
         except:
             assert False, "Domain must be a valid (and installed) Gym environment"
 
@@ -224,6 +226,9 @@ def on_press(key):
 
 
 def main(options):
+    cpu_usage_history = []
+    memory_usage_history = []
+
     resultdir = "Results/"
 
     resultdir = os.path.abspath(f"./{resultdir}")
@@ -272,10 +277,18 @@ def main(options):
     with open(os.path.join(resultdir, options.outfile + ".csv"), "a+") as result_file:
         result_file.write("\n")
         for i_episode in range(options.episodes):
+            cpu_usage = psutil.cpu_percent()
+            memory_usage = psutil.virtual_memory().percent
+
+            cpu_usage_history.append(cpu_usage)
+            memory_usage_history.append(memory_usage)
+
             solver.init_stats()
             solver.statistics[Statistics.Episode.value] += 1
             env.reset(seed=123)
             solver.train_episode()
+            if solver.converged:
+                break
             result_file.write(solver.get_stat() + "\n")
             # Decay epsilon
             if options.epsilon > options.epsilon_end:
@@ -292,10 +305,16 @@ def main(options):
                 render = False
             if (
                 options.solver
-                in ["ql", "sarsa", "aql", "dqn", "reinforce", "a2c", "ddpg"]
+                in ["ql", "sarsa", "aql", "dqn", "reinforce", "a2c", "ddpg", "dudqn"]
                 and not options.disable_plots
             ):
                 solver.plot(stats, int(0.1 * options.episodes), False)
+
+    average_cpu_usage = sum(cpu_usage_history) / len(cpu_usage_history)
+    average_memory_usage = sum(memory_usage_history) / len(memory_usage_history)
+
+    print(f"Average CPU Usage: {average_cpu_usage}%")
+    print(f"Average Memory Usage: {average_memory_usage}%")
 
     if not options.disable_plots:
         solver.run_greedy()
