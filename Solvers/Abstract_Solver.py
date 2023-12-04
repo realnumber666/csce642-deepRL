@@ -20,6 +20,7 @@ class AbstractSolver(ABC):
         self.options = options
         self.total_steps = 0
         self.render = False
+        self.state_history = []
 
     def init_stats(self):
         self.statistics[1:] = [0] * (len(Statistics) - 1)
@@ -37,7 +38,7 @@ class AbstractSolver(ABC):
         """
         next_state, reward, terminated, truncated, info = self.env.step(action)
 
-        reward += self.calc_reward(next_state)
+        reward += self.calc_reward(next_state, self.options.reward_type)
 
         # Update statistics
         self.statistics[Statistics.Rewards.value] += reward
@@ -46,19 +47,53 @@ class AbstractSolver(ABC):
 
         return next_state, reward, terminated or truncated, info
 
-    def calc_reward(self, state):
+    def calc_reward(self, state, reward_type=None):
         # Create a new reward function for the CartPole domain that takes into account the degree of the pole
         try:
             domain = self.env.unwrapped.spec.id
         except:
             domain = self.env.name
         if domain == "CartPole-v1":
-            x, x_dot, theta, theta_dot = state
-            r1 = (self.env.x_threshold - abs(x)) / self.env.x_threshold - 0.8
-            r2 = (
-                self.env.theta_threshold_radians - abs(theta)
-            ) / self.env.theta_threshold_radians - 0.5
-            return r1 + r2
+            if not reward_type or reward_type == "default":
+                x, x_dot, theta, theta_dot = state
+                r1 = (self.env.x_threshold - abs(x)) / self.env.x_threshold - 0.8
+                r2 = (
+                    self.env.theta_threshold_radians - abs(theta)
+                ) / self.env.theta_threshold_radians - 0.5
+                return r1 + r2
+            elif reward_type == "speed":
+                # Introducing penalties for the angular velocity of the pole and the velocity of the cart
+                # to encourage smoother motion
+                x, x_dot, theta, theta_dot = state
+                r1 = (self.env.x_threshold - abs(x)) / self.env.x_threshold - 0.8
+                r2 = (self.env.theta_threshold_radians - abs(theta)) / self.env.theta_threshold_radians - 0.5
+                r3 = -abs(x_dot)  # punish on car speed
+                r4 = -abs(theta_dot)  # punish on pole speed
+                return r1 + r2 + r3 + r4
+            elif reward_type == "center":
+                # Encouraging the cart to stay in the center can give an extra bonus for approaching the center position
+                x, x_dot, theta, theta_dot = state
+                r1 = (self.env.x_threshold - abs(x)) / self.env.x_threshold - 0.8
+                r2 = (self.env.theta_threshold_radians - abs(theta)) / self.env.theta_threshold_radians - 0.5
+                center_bonus = 1.0 if abs(x) < 0.5 else 0  # when car is close to center, give extra reward
+                return r1 + r2 + center_bonus
+            elif reward_type == "continuous":
+                # Extra bonus can be given if the trolley and pole can remain
+                # in the desired state for a consecutive period of time
+                x, x_dot, theta, theta_dot = state
+                r1 = (self.env.x_threshold - abs(x)) / self.env.x_threshold - 0.8
+                r2 = (self.env.theta_threshold_radians - abs(theta)) / self.env.theta_threshold_radians - 0.5
+                self.state_history.append((x, theta))
+                if len(self.state_history) > 10:  # check latest 10 state
+                    if all(abs(s[0]) < 0.5 and abs(s[1]) < 0.1 for s in self.state_history):
+                        continuous_bonus = 2.0
+                    else:
+                        continuous_bonus = 0
+                    self.state_history.pop(0)
+                else:
+                    continuous_bonus = 0
+                return r1 + r2 + continuous_bonus
+
         return 0
 
     def run_greedy(self):

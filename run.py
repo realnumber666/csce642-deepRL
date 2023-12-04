@@ -112,6 +112,14 @@ def build_parser():
         help="Seed integer for random stream",
     )
     parser.add_option(
+        "-R",
+        "--reward",
+        type="string",
+        dest="reward_type",
+        default="default",
+        help="reward type for CartPole, you can choose: default, speed, center and continuous",
+    )
+    parser.add_option(
         "-g",
         "--gamma",
         dest="gamma",
@@ -276,6 +284,7 @@ def main(options):
 
     with open(os.path.join(resultdir, options.outfile + ".csv"), "a+") as result_file:
         result_file.write("\n")
+        start_time = time.time()
         for i_episode in range(options.episodes):
             cpu_usage = psutil.cpu_percent()
             memory_usage = psutil.virtual_memory().percent
@@ -297,7 +306,7 @@ def main(options):
             stats.episode_rewards.append(solver.statistics[Statistics.Rewards.value])
             stats.episode_lengths.append(solver.statistics[Statistics.Steps.value])
             print(
-                f"Episode {i_episode+1}: Reward {solver.statistics[Statistics.Rewards.value]}, Steps {solver.statistics[Statistics.Steps.value]}"
+                f"Episode {i_episode+1}: Reward {solver.statistics[Statistics.Rewards.value]}, Steps {solver.statistics[Statistics.Steps.value]}, Time used {time.time() - start_time}"
             )
             global render
             if render and not options.disable_plots:

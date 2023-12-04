@@ -81,11 +81,11 @@ class DQN(AbstractSolver):
 
         self.start_time = time.time()
         self.total_training_time = 0
-        self.convergence_check_episodes = 50
-        self.convergence_threshold = 300
+        self.convergence_check_episodes = 25
+        self.convergence_threshold = 100
         self.rewards_history = deque(maxlen=self.convergence_check_episodes)
         self.converged = False
-        self.previous_avg = 0
+        self.window_size = 10
 
     def moving_average(self, data, window_size):
         data_list = list(data)
@@ -98,12 +98,12 @@ class DQN(AbstractSolver):
             self.consecutive_convergence_count = 0
             return False
 
-        current_avg = self.moving_average(self.rewards_history, self.convergence_check_episodes)
-        if np.abs(current_avg - self.previous_avg) < self.convergence_threshold:
+        if max(self.rewards_history) - min(self.rewards_history) < self.convergence_threshold:
             self.consecutive_convergence_count += 1
         else:
             self.consecutive_convergence_count = 0
-        print(f"current_avg {current_avg}, previous_avg {self.previous_avg}, consecutive_convergence_count {self.consecutive_convergence_count}")
+
+        print(f"current_avg {self.rewards_history[-1]}, consecutive_convergence_count {self.consecutive_convergence_count}")
         return self.consecutive_convergence_count >= self.convergence_check_episodes
 
     def update_target_model(self):
@@ -241,7 +241,7 @@ class DQN(AbstractSolver):
             if done:
                 break
 
-        self.rewards_history.append(total_reward)
+        self.rewards_history.append(self.moving_average(self.rewards_history, self.window_size))
         if self.has_converged():
             end_time = time.time()
             self.total_training_time = end_time - self.start_time
@@ -252,7 +252,7 @@ class DQN(AbstractSolver):
         return "DQN"
 
     def plot(self, stats, smoothing_window, final=False):
-        plotting.plot_episode_stats(stats, smoothing_window, final=final)
+        plotting.plot_episode_stats(stats, 25, final=final)
 
     def create_greedy_policy(self):
         """
