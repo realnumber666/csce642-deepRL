@@ -21,6 +21,7 @@ solvers = [
     "a2c",
     "ddpg",
     "dudqn",
+    "ppo",
 ]
 
 
@@ -81,6 +82,10 @@ def get_solver_class(name):
         from Solvers.DuDQN import DuDQN
 
         return DuDQN
+    elif name == solvers[14]:
+        from Solvers.PPO import PPO
+
+        return PPO
     else:
         assert False, "unknown solver name {}. solver must be from {}".format(
             name, str(solvers)

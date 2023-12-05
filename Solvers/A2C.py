@@ -1,10 +1,9 @@
 # Licensing Information:  You are free to use or extend this codebase for
 # educational purposes provided that (1) you do not distribute or publish
-# solutions, (2) you retain this notice, and (3) inform Guni Sharon at 
-# guni@tamu.edu regarding your usage (relevant statistics is reported to NSF).
-# The development of this assignment was supported by NSF (IIS-2238979).
-# Contributors:
-# The core code was developed by Guni Sharon (guni@tamu.edu).
+# solutions, (2) you retain this notice, and (3) you provide the following
+# attribution:
+# This CSCE-689 RL assignment codebase was developed at Texas A&M University.
+# The core code base was developed by Guni Sharon (guni@tamu.edu).
 # The PyTorch code was developed by Sheelabhadra Dey (sheelabhadra@tamu.edu).
 
 import torch
@@ -16,8 +15,6 @@ from torch.optim import Adam
 
 from Solvers.Abstract_Solver import AbstractSolver
 from lib import plotting
-import time
-from collections import deque
 
 
 class ActorCriticNetwork(nn.Module):
@@ -55,34 +52,6 @@ class A2C(AbstractSolver):
         self.policy = self.create_greedy_policy()
 
         self.optimizer = Adam(self.actor_critic.parameters(), lr=self.options.alpha)
-
-        self.start_time = time.time()
-        self.total_training_time = 0
-        self.convergence_check_episodes = 50
-        self.convergence_threshold = 300
-        self.rewards_history = deque(maxlen=self.convergence_check_episodes)
-        self.converged = False
-        self.previous_avg = 0
-
-    def moving_average(self, data, window_size):
-        data_list = list(data)
-        if len(data_list) < window_size:
-            return np.mean(data_list)
-        return np.mean(data_list[-window_size:])
-
-    def has_converged(self):
-        if len(self.rewards_history) < self.convergence_check_episodes:
-            self.consecutive_convergence_count = 0
-            return False
-
-        current_avg = self.moving_average(self.rewards_history, self.convergence_check_episodes)
-        if np.abs(current_avg - self.previous_avg) < self.convergence_threshold:
-            self.consecutive_convergence_count += 1
-        else:
-            self.consecutive_convergence_count = 0
-        print(f"current_avg {current_avg}, previous_avg {self.previous_avg}, consecutive_convergence_count {self.consecutive_convergence_count}")
-        # return self.consecutive_convergence_count >= self.convergence_check_episodes
-
 
     def create_greedy_policy(self):
         """
@@ -149,34 +118,29 @@ class A2C(AbstractSolver):
                 the critic's estimate at a given state.
             torch.as_tensor(state, dtype=torch.float32): Converts a numpy array
                 'state' to a tensor.
-            self.update_actor_critic(advantage, prob, value): Update actor critic. 
+            self.update_actor_critic(advantage, prob, value): Update actor critic.
         """
 
         state, _ = self.env.reset()
-        total_reward = 0
-        self.previous_avg = self.moving_average(self.rewards_history, self.convergence_check_episodes)
-
         for _ in range(self.options.steps):
             ################################
             #   YOUR IMPLEMENTATION HERE   #
             # Run update_actor_critic()    #
             # only ONCE at EACH step in    #
-            # an episode.                  # 
+            # an episode.                  #
             ################################
             action, prob, value = self.select_action(state)
             next_state, reward, done, _ = self.step(action)
-            advantage = torch.tensor(reward + (1 - int(done)) * self.options.gamma * self.actor_critic(torch.tensor(next_state, dtype=torch.float32))[1] - value, dtype=torch.float32)
+            next_state_tensor = torch.as_tensor(next_state)
+            _, next_value = self.actor_critic(next_state_tensor)
+
+            td_target = reward + self.options.gamma * next_value * (1 - int(done))
+            advantage = td_target - value
+
             self.update_actor_critic(advantage, prob, value)
-            state = next_state
             if done:
                 break
-
-        self.rewards_history.append(total_reward)
-        if self.has_converged():
-            end_time = time.time()
-            self.total_training_time = end_time - self.start_time
-            self.converged = True
-            print(f"Algorithm converged in {self.total_training_time} seconds.")
+            state = next_state
 
     def actor_loss(self, advantage, prob):
         """
@@ -213,7 +177,7 @@ class A2C(AbstractSolver):
         ################################
         #   YOUR IMPLEMENTATION HERE   #
         ################################
-        return -value * advantage
+        return - advantage * value
 
     def __str__(self):
         return "A2C"

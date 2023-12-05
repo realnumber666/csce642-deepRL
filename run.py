@@ -296,8 +296,8 @@ def main(options):
             solver.statistics[Statistics.Episode.value] += 1
             env.reset(seed=123)
             solver.train_episode()
-            if solver.converged:
-                break
+            # if solver.converged:
+            #     break
             result_file.write(solver.get_stat() + "\n")
             # Decay epsilon
             if options.epsilon > options.epsilon_end:
@@ -314,7 +314,7 @@ def main(options):
                 render = False
             if (
                 options.solver
-                in ["ql", "sarsa", "aql", "dqn", "reinforce", "a2c", "ddpg", "dudqn"]
+                in ["ql", "sarsa", "aql", "dqn", "reinforce", "a2c", "ddpg", "dudqn", "ppo"]
                 and not options.disable_plots
             ):
                 solver.plot(stats, int(0.1 * options.episodes), False)
