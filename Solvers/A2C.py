@@ -118,7 +118,7 @@ class A2C(AbstractSolver):
                 the critic's estimate at a given state.
             torch.as_tensor(state, dtype=torch.float32): Converts a numpy array
                 'state' to a tensor.
-            self.update_actor_critic(advantage, prob, value): Update actor critic.
+            self.update_actor_critic(advantage, prob, value): Update actor critic. 
         """
 
         state, _ = self.env.reset()
@@ -127,20 +127,21 @@ class A2C(AbstractSolver):
             #   YOUR IMPLEMENTATION HERE   #
             # Run update_actor_critic()    #
             # only ONCE at EACH step in    #
-            # an episode.                  #
+            # an episode.                  # 
             ################################
-            action, prob, value = self.select_action(state)
+            action,prob,value = self.select_action(state)
             next_state, reward, done, _ = self.step(action)
             next_state_tensor = torch.as_tensor(next_state)
-            _, next_value = self.actor_critic(next_state_tensor)
-
-            td_target = reward + self.options.gamma * next_value * (1 - int(done))
+            _,next_value = self.actor_critic(next_state_tensor)
+            
+            td_target = reward + self.options.gamma * next_value * (1-int(done))
             advantage = td_target - value
 
             self.update_actor_critic(advantage, prob, value)
             if done:
                 break
             state = next_state
+
 
     def actor_loss(self, advantage, prob):
         """
@@ -163,6 +164,7 @@ class A2C(AbstractSolver):
         ################################)
         return -torch.log(prob) * advantage
 
+
     def critic_loss(self, advantage, value):
         """
         The integral of the critic gradient
@@ -178,7 +180,7 @@ class A2C(AbstractSolver):
         #   YOUR IMPLEMENTATION HERE   #
         ################################
         return - advantage * value
-
+    
     def __str__(self):
         return "A2C"
 

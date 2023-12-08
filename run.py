@@ -202,7 +202,7 @@ def getEnv(domain, render_mode=""):
         return WindyGridworldEnv()
     else:
         try:
-            return gym.make(domain)
+            return gym.make(domain, render_mode=render_mode)
         except:
             assert False, "Domain must be a valid (and installed) Gym environment"
 
@@ -305,16 +305,20 @@ def main(options):
             # Update statistics
             stats.episode_rewards.append(solver.statistics[Statistics.Rewards.value])
             stats.episode_lengths.append(solver.statistics[Statistics.Steps.value])
+            average_cpu_usage = sum(cpu_usage_history) / len(cpu_usage_history)
+            average_memory_usage = sum(memory_usage_history) / len(memory_usage_history)
+
             print(
-                f"Episode {i_episode+1}: Reward {solver.statistics[Statistics.Rewards.value]}, Steps {solver.statistics[Statistics.Steps.value]}, Time used {time.time() - start_time}"
+                f"Episode {i_episode+1}: Reward {solver.statistics[Statistics.Rewards.value]}, Steps {solver.statistics[Statistics.Steps.value]}, Time used {time.time() - start_time}, Average CPU Usage: {average_cpu_usage}%, Average Memory Usage: {average_memory_usage}%"
             )
+
             global render
             if render and not options.disable_plots:
                 solver.run_greedy()
                 render = False
             if (
                 options.solver
-                in ["ql", "sarsa", "aql", "dqn", "reinforce", "a2c", "ddpg", "dudqn", "ppo"]
+                in ["ql", "sarsa", "aql", "dqn", "reinforce", "a2c", "ddpg", "dudqn", "ppo", "a3c"]
                 and not options.disable_plots
             ):
                 solver.plot(stats, int(0.1 * options.episodes), False)
